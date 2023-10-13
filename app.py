@@ -55,7 +55,9 @@ with cols[2]:
     fig = px.line(df_grafico.reset_index(), x='fecha', y='informal_ajustado', hover_data=['venta_informal'],
                   log_y=True, title=f'Precio Dólar Blue a pesos de {fecha.date()}')
 
-    fig.add_vline(x=fecha, line_dash="dash", name="Vertical Line", line_width=1)
+    # Add vertical line for each year
+    for year in df_grafico.index.year.unique():
+        fig.add_vline(x=pd.Timestamp(year, 1, 1), name=f"Vertical Line {year}", line_width=0.05)
 
     # Extend range_x limit a bit further than the current one
     fig.update_xaxes(range=[df_grafico.index.min(), df_grafico.index.max() + pd.Timedelta(days=365)])
