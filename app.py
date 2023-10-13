@@ -15,7 +15,7 @@ def get_data():
     try:
         r = requests.get('https://dolarapi.com/v1/dolares/blue')
         dolar_blue_hoy = eval(r.text)
-        df.loc[dolar_blue_hoy['fechaActualizacion'].split('T')[0], ['venta_informal', 'informal_ajustado']] = dolar_blue_hoy['venta']
+        df.loc[df.index[-1], ['venta_informal', 'informal_ajustado']] = dolar_blue_hoy['venta']
         return df
     except Exception as e:
         dolar_blue_hoy
