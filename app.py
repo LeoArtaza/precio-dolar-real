@@ -1,6 +1,7 @@
 import streamlit as st
-import plotly.express as px
 import pandas as pd
+import numpy as np
+import plotly.express as px
 import requests
 
 st.set_page_config(page_title="Precio Dólar Real", page_icon="📈")
