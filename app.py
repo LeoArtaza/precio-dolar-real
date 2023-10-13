@@ -96,7 +96,35 @@ if link_precio_rango:
 
 update_plot(fecha_precio=fecha_precio, rango_fecha=rango_fecha, base_100=base_100)
 
-# Footer with GitHub link
+with st.expander(label='Metodología', expanded=False):
+    st.markdown("""## Cálculo
+Para poder calcular el precio real del dólar de manera diaria, se debe estimar la inflación diaria a partir de la inflación mensual.
+Para esto, se asume que la inflación es homogénea a la largo del mes, y se calcula de la siguiente manera:
+""")
+    st.latex(r'\text{Inflación diaria} = (1 + \text{Inflación mensual})^{\frac{1}{\text{ctdad. días en mes}}}')
+    st.markdown("""
+Luego, se calcula el valor del dólar ajustado por inflación del peso argentino, e inflación del dólar estadounidense:
+""")
+    st.latex(r'\text{Precio Dólar Real}_t = \text{Precio Dólar}_t \times \frac{\prod_{i=1}^{t} (1 + \text{Inflación diaria del peso}_i)}{\prod_{i=1}^{t} (1 + \text{Inflación diaria del dólar}_i)}')
+    st.markdown("""Donde 't' es la cantidad de días en el pasado que se quiere calcular.
+## Fuentes:
+- Dólar
+    - Precio oficial
+        - Ene 1992-Abr 2002: Datos.gob.ar, serie: 175.1_DR_ESTANSE_0_0_20
+        - Abr 2002-Presente: Ámbito Financiero
+    - Precio blue
+        - Ene 1992-Abr 2002: Dólar blue = Dólar oficial
+        - Abr 2002-Presente: Ámbito Financiero
+        - Día de hoy: dolarapi.com
+- Inflación
+    - Inflación Argentina
+        - 1992-2017: inflacionverdadera.com/argentina
+        - 2017-Presente: Datos.gob.ar, serie: 148.3_INIVELNAL_DICI_M_26
+    - Inflación EEUU
+        - fred.stlouisfed.org, serie: CPIAUCNS
+""")
+
+# GitHub link
 st.markdown(
     """
     [![GitHub](https://img.shields.io/badge/GitHub-Repo-blue.svg)](https://github.com/LeoArtaza/precio-dolar-real)
