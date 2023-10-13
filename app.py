@@ -60,9 +60,7 @@ with cols[2]:
         fig.add_vline(x=pd.Timestamp(year, 1, 1), name=f"Vertical Line {year}", line_width=0.05)
 
     # Extend range_x limit a bit further than the current one
-    fig.update_xaxes(range=[df_grafico.index.min(), df_grafico.index.max() + pd.Timedelta(days=365)])
-
-    st.plotly_chart(fig)
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
     with st.expander(label='Data', expanded=False):
         st.dataframe(df_grafico.iloc[::-1])
