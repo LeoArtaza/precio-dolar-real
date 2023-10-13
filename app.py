@@ -23,10 +23,30 @@ def get_data():
 
 df = get_data()
 
-def update_plot(fecha):
-    fecha = pd.to_datetime(fecha)
+import locale
+locale.setlocale(locale.LC_ALL,'es_ES.UTF-8')
+import calendar
+def aumento_porcentaje(x, y, puntos_porcentuales=False):
+    if not puntos_porcentuales:
+        return str(round((x/y-1)*100, 1))+'%'
+    return str(round((x - y)*100, 1))+' p.p.'
+cols = st.columns(3)
+with cols[0]:
+    st.metric(label="Dólar Blue Hoy",
+          value='$' + str(round(df['venta_informal'].iloc[-1])),
+          delta=aumento_porcentaje(df['informal_ajustado'].iloc[-1], df['informal_ajustado'].iloc[-2]),
+          delta_color='inverse')
+with cols[1]:
+    st.metric(label=f"Inflación estimada de {calendar.month_name[pd.to_datetime('today').date().month]}",
+          value=aumento_porcentaje(df['inflacion_arg'].iloc[-1]**30.5, 1),
+          delta=aumento_porcentaje(df['inflacion_arg'].iloc[-1]**30.5, df['inflacion_arg'].resample('m').first().iloc[-2]**30.5, puntos_porcentuales=True),
+          delta_color='inverse',
+          help='Relevamiento de Expectativas de Inflación del BCRA')
+with cols[2]:
+    st.metric(label=f"Equivalente a fin de {calendar.month_name[pd.to_datetime('today').date().month]}",
+          value='$' + str(round(df['venta_informal'].iloc[-1]*df['inflacion_arg'].iloc[-1]**(30.5-df.index[-1].day))),
+              help='Este sería el valor del dólar blue a fin de mes si mantuviera su valor real, asumiendo que se cumple la expectativa de inflación, y que la inflación es homogénea a lo largo del mes.')
 
-    df_grafico = df.copy()
 
     ajustador = (df_grafico.inflacion_arg[::-1].cumprod() / df_grafico.inflacion_us[::-1].cumprod()).shift(1, fill_value=1)
     df_grafico['informal_ajustado'] = df_grafico['informal_ajustado'] / ajustador[fecha]
