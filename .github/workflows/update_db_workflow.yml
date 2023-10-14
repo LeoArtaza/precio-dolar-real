@@ -3,6 +3,8 @@ name: Update DB
 on:
   schedule:
     - cron: '0 3 * * *' # Ejecutar todos los días a las 0:00 GMT-3
+    
+  workflow_dispatch:
 
 jobs:
   update-db:
