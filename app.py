@@ -48,12 +48,9 @@ with cols[2]:
           value='$' + str(round(df['venta_informal'].iloc[-1]*df['inflacion_arg'].iloc[-1]**(30.5-df.index[-1].day))),
               help='Este sería el valor del dólar blue a fin de mes si mantuviera su valor real, asumiendo que se cumple la expectativa de inflación, y que la inflación es homogénea a lo largo del mes.')
 
-def update_plot(fecha_precio, rango_fecha, base_100=False):
-    fecha_precio = pd.to_datetime(fecha_precio)
+st.divider()
 
-    df_grafico = df.copy()
-
-    ajustador = (df_grafico.inflacion_arg[::-1].cumprod() / df_grafico.inflacion_us[::-1].cumprod()).shift(1, fill_value=1)
+preset_fecha_dict = {'3m': pd.Timedelta(days=90),
 
     df_grafico['informal_ajustado'] /= ajustador[fecha_precio]
 
