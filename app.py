@@ -78,44 +78,46 @@ with st.expander(label='Opciones Avanzadas', expanded=False):
 
     fecha_precio_referencia = st.slider('Fecha de referencia de precios', df.index.min().date() , df.index.max().date(), value=df.index.max().date(), format="DD/MM/YY", key='fecha_precio_referencia')
 
-    if base_100:
-        df_grafico['informal_ajustado'] /= df_grafico.loc[fecha_precio, 'informal_ajustado'] * 0.01
+fecha_precio_referencia = pd.to_datetime(fecha_precio_referencia)
 
-    fig = px.line(df_grafico.reset_index(), x='fecha', y='informal_ajustado', hover_data=['venta_informal'],
-                  log_y=True, title='Precio dólar blue' + (f' a pesos de {fecha_precio.strftime("%d de %B de %Y")}' if not base_100 else f'. Base 100 = {fecha_precio.date()}'))
+ajustador = (df.inflacion_arg[::-1].cumprod() / df.inflacion_us[::-1].cumprod()).shift(1, fill_value=1)
 
-    fig.add_vline(x=fecha_precio, line_dash="dash", name="Vertical Line", line_width=1)
+df['informal_ajustado_a_fecha'] = df['informal_ajustado'] / ajustador[fecha_precio_referencia]
 
-    # Add vertical line for each year
-    for year in df_grafico.index.year.unique():
-        fig.add_vline(x=pd.Timestamp(year, 1, 1), name=f"Vertical Line {year}", line_width=0.05)
+if base_100:
+    df['informal_ajustado_a_fecha'] /= df.loc[fecha_precio_referencia, 'informal_ajustado_a_fecha'] * 0.01
 
-    # Extend range_x limit a bit further than the current one
-    df_filtrado = df_grafico.loc[rango_fecha[0]:rango_fecha[1], 'informal_ajustado']
-    x_padding = pd.Timedelta(days=len(df_filtrado)//20)
-    y_padding = 1.1
-    fig.update_xaxes(range=[rango_fecha[0], rango_fecha[1] + x_padding], showspikes=True, spikethickness=0.5)
-    fig.update_yaxes(range=[np.log10(df_filtrado.min()/y_padding),
-                            np.log10(df_filtrado.max()*y_padding)], type="log", showspikes=True, spikethickness=0.5)
+fig = px.line(df.reset_index().rename(columns={'fecha': 'Fecha', 'venta_informal': 'Precio venta', 'informal_ajustado_a_fecha': 'Precio ajustado'}),
+              x='Fecha', y='Precio ajustado', hover_data=['Fecha', 'Precio venta', 'Precio ajustado'], log_y=True,
+              title='Precio dólar blue' + (f' a pesos de {fecha_precio_referencia.strftime("%d de %B de %Y")}' if not base_100 else f'. Base 100 = {fecha_precio_referencia.date()}'))
 
+if fecha_precio_referencia != df.index[-1]:
+    fig.add_vline(x=fecha_precio_referencia, line_dash="dash", name="Fecha precio de referencia", line_width=1, line_color='gray')
+
+fig.add_hline(y=df['informal_ajustado_a_fecha'].iloc[-1], name="Precio actual", line_dash="dash",
+              line_width=0.5, line_color='gray', annotation_text='Precio actual', annotation_position='top left',
+              annotation_font_size=150,
+              annotation_font_color="blue")
+
+# Add vertical line for each year
+for year in df.index.year.unique():
+    fig.add_vline(x=pd.Timestamp(year, 1, 1), name=f"Año {year}", line_width=0.05)
+
+# Extend range_x limit a bit further than the current one
+df_filtrado = df.loc[rango_fecha[0]:rango_fecha[1], 'informal_ajustado_a_fecha']
+x_padding = pd.Timedelta(days=len(df_filtrado)//20)
+y_padding = 1.1
+fig.update_xaxes(range=[rango_fecha[0], rango_fecha[1] + x_padding], showspikes=True, spikethickness=0.5)
+fig.update_yaxes(range=[np.log10(df_filtrado.min()/y_padding),
+                        np.log10(df_filtrado.max()*y_padding)], type="log", showspikes=True, spikethickness=0.5)
+
+fig.update_layout(dragmode=False, xaxis_title='Fecha', yaxis_title='Precio ajustado')
+
+with fig_container:
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-    with st.expander(label='Data', expanded=False):
-        st.dataframe(df_grafico.iloc[::-1])
-
-fecha_precio = st.slider('Fecha de referencia de precios', df.index.min().date(), df.index.max().date(), value=df.index.max().date(), format="DD/MM/YY", key='fecha_precio')
-
-cols = st.columns(spec=[0.2, 1])
-with cols[0]:
-    link_precio_rango = st.toggle(label='🔗', help='La fecha de referencia de precios será el inicio del gráfico.')
-with cols[1]:
-    base_100 = st.toggle(label='Base 100')
-
-rango_fecha = st.slider('Rango de fecha a visualizar', df.index.min().date(), df.index.max().date(), value=(df.index.max().date() - pd.Timedelta(days=365*5), df.index.max().date()), format="DD/MM/YY")
-if link_precio_rango:
-    fecha_precio = rango_fecha[0]
-
-update_plot(fecha_precio=fecha_precio, rango_fecha=rango_fecha, base_100=base_100)
+with st.expander(label='Data', expanded=False):
+    st.dataframe(df.iloc[::-1])
 
 with st.expander(label='Metodología', expanded=False):
     st.markdown("""## Cálculo
