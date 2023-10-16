@@ -2,3 +2,5 @@ __pycache__
 data_dolar_real.csv
 main_notebook.ipynb
 .streamlit
+update_db.py
+packages.txt
