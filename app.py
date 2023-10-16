@@ -51,8 +51,32 @@ with cols[2]:
 st.divider()
 
 preset_fecha_dict = {'3m': pd.Timedelta(days=90),
+                     '6m': pd.Timedelta(days=180),
+                     '1a': pd.Timedelta(days=365),
+                     '5a': pd.Timedelta(days=1825),
+                     '10a': pd.Timedelta(days=3650),
+                     'Máx.': pd.Timedelta(days=len(df)-1)}
 
-    df_grafico['informal_ajustado'] /= ajustador[fecha_precio]
+fig_container = st.container()
+
+with fig_container:
+    preset_fecha = st.radio('Rangos de fechas predeterminados', list(preset_fecha_dict.keys())[::-1], index=2, key='preset_fecha',
+                        horizontal=True, label_visibility='collapsed')
+
+with st.expander(label='Opciones Avanzadas', expanded=False):
+    rango_fecha = st.slider('Rango de fechas', df.index.min().date(), df.index.max().date(),
+                            value=(df.index.max().date() - preset_fecha_dict[preset_fecha], df.index.max().date()),
+                            format="DD/MM/YY", key='slider_fechas')
+    cols = st.columns(spec=[0.2, 1])
+    with cols[0]:
+        link_precio_rango = st.toggle(label='🔗', help='La fecha de referencia de precios será el inicio del gráfico.', key='link_precio_rango')
+    with cols[1]:
+        base_100 = st.toggle(label='Base 100')
+        
+    if st.session_state['link_precio_rango']:
+        st.session_state['fecha_precio_referencia'] = st.session_state['slider_fechas'][0]
+
+    fecha_precio_referencia = st.slider('Fecha de referencia de precios', df.index.min().date() , df.index.max().date(), value=df.index.max().date(), format="DD/MM/YY", key='fecha_precio_referencia')
 
     if base_100:
         df_grafico['informal_ajustado'] /= df_grafico.loc[fecha_precio, 'informal_ajustado'] * 0.01
