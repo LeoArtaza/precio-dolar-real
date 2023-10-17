@@ -1,8 +1,8 @@
 numpy
-pandas
+pandas==2.1.1
 openpyxl
 plotly
 streamlit
-sqlalchemy
+sqlalchemy==2.0.22
 psycopg2-binary
 python-dotenv
