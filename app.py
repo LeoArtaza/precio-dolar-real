@@ -14,7 +14,7 @@ st.title("Precio Dólar Real")
 
 conn = st.experimental_connection("", type='sql', url=os.getenv("POSTGRES_URL").replace('postgres://', 'postgresql://'))
 with st.spinner('Cargando datos...'):
-    df = conn.query('SELECT * FROM data_dolar_real', ttl=24 - datetime.datetime.now().hour + 3, index_col='fecha', parse_dates=True)
+    df = conn.query('SELECT * FROM data_dolar_real', ttl=datetime.timedelta(hours=6), index_col='fecha', parse_dates=True)
 
 @st.cache_data(ttl=900, show_spinner='Obteniendo precio de hoy...')
 def agregar_dolar_hoy(df):
@@ -30,9 +30,7 @@ def agregar_dolar_hoy(df):
 
 df = agregar_dolar_hoy(df)
 
-import locale
-locale.setlocale(locale.LC_ALL,'es_ES.UTF-8')
-import calendar
+dict_meses = {1: 'enero', 2: 'febrero', 3: 'marzo', 4: 'abril', 5: 'mayo', 6: 'junio', 7: 'julio', 8: 'agosto', 9: 'septiembre', 10: 'octubre', 11: 'noviembre', 12: 'diciembre'}
 def aumento_porcentaje(x, y, puntos_porcentuales=False):
     if not puntos_porcentuales:
         return str(round((x/y-1)*100, 1))+'%'
@@ -44,13 +42,13 @@ with cols[0]:
           delta=aumento_porcentaje(df['informal_ajustado'].iloc[-1], df['informal_ajustado'].iloc[-2]),
           delta_color='inverse')
 with cols[1]:
-    st.metric(label=f"Inflación estimada de {calendar.month_name[pd.to_datetime('today').date().month]}",
+    st.metric(label=f"Inflación estimada de {dict_meses[pd.to_datetime('today').date().month]}",
           value=aumento_porcentaje(df['inflacion_arg'].iloc[-1]**30.5, 1),
           delta=aumento_porcentaje(df['inflacion_arg'].iloc[-1]**30.5, df['inflacion_arg'].resample('m').first().iloc[-2]**30.5, puntos_porcentuales=True),
           delta_color='inverse',
           help='Relevamiento de Expectativas de Inflación del BCRA')
 with cols[2]:
-    st.metric(label=f"Equivalente a fin de {calendar.month_name[pd.to_datetime('today').date().month]}",
+    st.metric(label=f"Equivalente a fin de {dict_meses[pd.to_datetime('today').date().month]}",
           value='$' + str(round(df['venta_informal'].iloc[-1]*df['inflacion_arg'].iloc[-1]**(30.5-df.index[-1].day))),
               help='Este sería el valor del dólar blue a fin de mes si mantuviera su valor real, asumiendo que se cumple la expectativa de inflación, y que la inflación es homogénea a lo largo del mes.')
 
