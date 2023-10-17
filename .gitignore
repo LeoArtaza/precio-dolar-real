@@ -4,3 +4,4 @@ main_notebook.ipynb
 .streamlit
 update_db.py
 packages.txt
+.env
