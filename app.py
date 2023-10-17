@@ -116,8 +116,8 @@ fig.update_layout(dragmode=False, xaxis_title='Fecha', yaxis_title='Precio ajust
 with fig_container:
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-with st.expander(label='Data', expanded=False):
-    st.dataframe(df.iloc[::-1])
+# with st.expander(label='Data', expanded=False):
+#     st.dataframe(df.iloc[::-1])
 
 with st.expander(label='Metodología', expanded=False):
     st.markdown("""## Cálculo
