@@ -3,16 +3,21 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import requests
+import datetime
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
 st.set_page_config(page_title="Precio Dólar Real", page_icon="📈")
 
 st.title("Precio Dólar Real")
 
-@st.cache_data(ttl=600)
-def get_data():
-    from streamlit_gsheets import GSheetsConnection
-    conn = st.experimental_connection("gsheets", type=GSheetsConnection)
-    df = conn.read(index_col=0, parse_dates=True)
+conn = st.experimental_connection("", type='sql', url=os.getenv("POSTGRES_URL"))
+with st.spinner('Cargando datos...'):
+    df = conn.query('SELECT * FROM data_dolar_real', ttl=24 - datetime.datetime.now().hour + 3, index_col='fecha', parse_dates=True)
+
+@st.cache_data(ttl=900, show_spinner='Obteniendo precio de hoy...')
+def agregar_dolar_hoy(df):
     try:
         r = requests.get('https://dolarapi.com/v1/dolares/blue')
         dolar_blue_hoy = eval(r.text)
@@ -21,8 +26,9 @@ def get_data():
     except Exception as e:
         dolar_blue_hoy
         st.error('No se pudo acceder al valor del día de la fecha.', e)
+        return df
 
-df = get_data()
+df = agregar_dolar_hoy(df)
 
 import locale
 locale.setlocale(locale.LC_ALL,'es_ES.UTF-8')
