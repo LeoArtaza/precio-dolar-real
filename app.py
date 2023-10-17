@@ -12,7 +12,7 @@ st.set_page_config(page_title="Precio Dólar Real", page_icon="📈")
 
 st.title("Precio Dólar Real")
 
-conn = st.experimental_connection("", type='sql', url=os.getenv("POSTGRES_URL"))
+conn = st.experimental_connection("", type='sql', url=os.getenv("POSTGRES_URL").replace('postgres://', 'postgresql://'))
 with st.spinner('Cargando datos...'):
     df = conn.query('SELECT * FROM data_dolar_real', ttl=24 - datetime.datetime.now().hour + 3, index_col='fecha', parse_dates=True)
 
