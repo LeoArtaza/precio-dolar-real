@@ -1,36 +1,37 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import numpy as np
 import plotly.express as px
 import requests
-import datetime
-import os
-from dotenv import load_dotenv
-load_dotenv()
 
 st.set_page_config(page_title="Precio Dólar Real", page_icon="📈")
 
 st.title("Precio Dólar Real")
 
-conn = st.experimental_connection("", type='sql', url=os.getenv("POSTGRES_URL").replace('postgres://', 'postgresql://'))
-with st.spinner('Cargando datos...'):
-    df = conn.query('SELECT * FROM data_dolar_real', ttl=datetime.timedelta(hours=6), index_col='fecha', parse_dates=True)
+@st.cache_data(ttl=pd.Timedelta(hours=6))
+def cargar_datos():
+    conn = st.experimental_connection("gsheets", type=GSheetsConnection)
+    df = conn.read(index_col=0, parse_dates=True)
+    return df
 
-@st.cache_data(ttl=900, show_spinner='Obteniendo precio de hoy...')
-def agregar_dolar_hoy(df):
+df = cargar_datos()
+
+@st.cache_data(ttl=pd.Timedelta(minutes=15))
+def cargar_dolar_hoy():
     try:
         r = requests.get('https://dolarapi.com/v1/dolares/blue')
         dolar_blue_hoy = eval(r.text)
         df.loc[df.index[-1], ['venta_informal', 'informal_ajustado']] = dolar_blue_hoy['venta']
-        return df
     except Exception as e:
-        dolar_blue_hoy
-        st.error('No se pudo acceder al valor del día de la fecha.', e)
-        return df
+        st.warning('No se pudo acceder al valor actual.', e)
+    return df
 
-df = agregar_dolar_hoy(df)
+df = cargar_dolar_hoy()
 
-dict_meses = {1: 'enero', 2: 'febrero', 3: 'marzo', 4: 'abril', 5: 'mayo', 6: 'junio', 7: 'julio', 8: 'agosto', 9: 'septiembre', 10: 'octubre', 11: 'noviembre', 12: 'diciembre'}
+import locale
+locale.setlocale(locale.LC_ALL,'es_ES.UTF-8')
+import calendar
 def aumento_porcentaje(x, y, puntos_porcentuales=False):
     if not puntos_porcentuales:
         return str(round((x/y-1)*100, 1))+'%'
@@ -42,13 +43,13 @@ with cols[0]:
           delta=aumento_porcentaje(df['informal_ajustado'].iloc[-1], df['informal_ajustado'].iloc[-2]),
           delta_color='inverse')
 with cols[1]:
-    st.metric(label=f"Inflación estimada de {dict_meses[pd.to_datetime('today').date().month]}",
+    st.metric(label=f"Inflación estimada de {calendar.month_name[pd.to_datetime('today').date().month]}",
           value=aumento_porcentaje(df['inflacion_arg'].iloc[-1]**30.5, 1),
           delta=aumento_porcentaje(df['inflacion_arg'].iloc[-1]**30.5, df['inflacion_arg'].resample('m').first().iloc[-2]**30.5, puntos_porcentuales=True),
           delta_color='inverse',
           help='Relevamiento de Expectativas de Inflación del BCRA')
 with cols[2]:
-    st.metric(label=f"Equivalente a fin de {dict_meses[pd.to_datetime('today').date().month]}",
+    st.metric(label=f"Equivalente a fin de {calendar.month_name[pd.to_datetime('today').date().month]}",
           value='$' + str(round(df['venta_informal'].iloc[-1]*df['inflacion_arg'].iloc[-1]**(30.5-df.index[-1].day))),
               help='Este sería el valor del dólar blue a fin de mes si mantuviera su valor real, asumiendo que se cumple la expectativa de inflación, y que la inflación es homogénea a lo largo del mes.')
 
@@ -77,7 +78,7 @@ with st.expander(label='Opciones Avanzadas', expanded=False):
     with cols[1]:
         base_100 = st.toggle(label='Base 100')
         
-    if st.session_state['link_precio_rango']:
+    if link_precio_rango:
         st.session_state['fecha_precio_referencia'] = st.session_state['slider_fechas'][0]
 
     fecha_precio_referencia = st.slider('Fecha de referencia de precios', df.index.min().date() , df.index.max().date(), value=df.index.max().date(), format="DD/MM/YY", key='fecha_precio_referencia')
@@ -119,9 +120,6 @@ fig.update_layout(dragmode=False, xaxis_title='Fecha', yaxis_title='Precio ajust
 
 with fig_container:
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-
-# with st.expander(label='Data', expanded=False):
-#     st.dataframe(df.iloc[::-1])
 
 with st.expander(label='Metodología', expanded=False):
     st.markdown("""## Cálculo

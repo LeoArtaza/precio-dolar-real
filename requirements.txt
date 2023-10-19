@@ -3,6 +3,7 @@ pandas
 openpyxl
 plotly
 streamlit
+st-gsheets-connection
 sqlalchemy
 psycopg2-binary
 python-dotenv
