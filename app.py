@@ -80,8 +80,10 @@ with st.expander(label='Opciones Avanzadas', expanded=False):
         
     if link_precio_rango:
         st.session_state['fecha_precio_referencia'] = st.session_state['slider_fechas'][0]
+    else:
+        st.session_state['fecha_precio_referencia'] = df.index.max().date()
 
-    fecha_precio_referencia = st.slider('Fecha de referencia de precios', df.index.min().date() , df.index.max().date(), value=df.index.max().date(), format="DD/MM/YY", key='fecha_precio_referencia')
+    fecha_precio_referencia = st.slider('Fecha de referencia de precios', df.index.min().date() , df.index.max().date(), format="DD/MM/YY", key='fecha_precio_referencia')
 
 fecha_precio_referencia = pd.to_datetime(fecha_precio_referencia)
 
