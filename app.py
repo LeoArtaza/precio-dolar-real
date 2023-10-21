@@ -121,7 +121,10 @@ fig.update_xaxes(range=[rango_fecha[0], rango_fecha[1] + x_padding], showspikes=
 fig.update_yaxes(range=[np.log10(df_filtrado.min()/y_padding),
                         np.log10(df_filtrado.max()*y_padding)], type="log", showspikes=True, spikethickness=0.5)
 
-fig.update_layout(dragmode=False, xaxis_title='Fecha', yaxis_title='Precio ajustado')
+fig.add_annotation(text="dolar-real.streamlit.app",
+                  xref="paper", yref="paper",
+                  x=1, y=0, showarrow=False, align="right")
+
 
 with fig_container:
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
