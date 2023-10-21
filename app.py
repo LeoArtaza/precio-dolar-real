@@ -94,11 +94,13 @@ ajustador = (df.inflacion_arg[::-1].cumprod() / df.inflacion_us[::-1].cumprod())
 
 df['informal_ajustado_a_fecha'] = df['informal_ajustado'] / ajustador[fecha_precio_referencia]
 
+nombre_variable = 'Precio ajustado'
 if base_100:
     df['informal_ajustado_a_fecha'] /= df.loc[fecha_precio_referencia, 'informal_ajustado_a_fecha'] * 0.01
+    nombre_variable = 'Índice de precio'
 
-fig = px.line(df.reset_index().rename(columns={'fecha': 'Fecha', 'venta_informal': 'Precio venta', 'informal_ajustado_a_fecha': 'Precio ajustado'}),
-              x='Fecha', y='Precio ajustado', hover_data=['Fecha', 'Precio venta', 'Precio ajustado'], log_y=True,
+fig = px.line(df.reset_index().rename(columns={'fecha': 'Fecha', 'venta_informal': 'Precio venta', 'informal_ajustado_a_fecha': nombre_variable}),
+              x='Fecha', y=nombre_variable, hover_data=['Fecha', 'Precio venta', nombre_variable], log_y=True,
               title='Precio dólar blue' + (f' a pesos de {fecha_precio_referencia.strftime("%d de %B de %Y")}' if not base_100 else f'. Base 100 = {fecha_precio_referencia.date()}'))
 
 if fecha_precio_referencia != df.index[-1]:
@@ -125,6 +127,7 @@ fig.add_annotation(text="dolar-real.streamlit.app",
                   xref="paper", yref="paper",
                   x=1, y=0, showarrow=False, align="right")
 
+fig.update_layout(dragmode=False, xaxis_title='Fecha', yaxis_title=nombre_variable)
 
 with fig_container:
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
