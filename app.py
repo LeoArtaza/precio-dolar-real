@@ -9,7 +9,7 @@ st.set_page_config(page_title="Precio Dólar Real", page_icon="📈")
 
 st.title("Precio Dólar Real")
 
-@st.cache_data(ttl=pd.Timedelta(hours=6))
+@st.cache_data(ttl=pd.Timedelta(hours=1))
 def cargar_datos():
     conn = st.experimental_connection("gsheets", type=GSheetsConnection)
     df = conn.read(index_col=0, parse_dates=True)
