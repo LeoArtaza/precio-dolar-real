@@ -92,7 +92,7 @@ fecha_precio_referencia = pd.to_datetime(fecha_precio_referencia)
 
 ajustador = (df.inflacion_arg[::-1].cumprod() / df.inflacion_us[::-1].cumprod()).shift(1, fill_value=1)
 
-df['informal_ajustado_a_fecha'] = df['informal_ajustado'] / ajustador[fecha_precio_referencia]
+df['informal_ajustado_a_fecha'] = (df['informal_ajustado'] / ajustador[fecha_precio_referencia]).round(2)
 
 nombre_variable = 'Precio ajustado'
 if base_100:
@@ -104,8 +104,31 @@ fig = px.line(df.reset_index().rename(columns={'fecha': 'Fecha', 'venta_informal
               title='Precio dólar blue' + (f' a pesos de {fecha_precio_referencia.strftime("%d de %B de %Y")}' if not base_100 else f'. Base 100 = {fecha_precio_referencia.date()}'))
 
 if fecha_precio_referencia != df.index[-1]:
+    # Linea en fecha de referencia
     fig.add_vline(x=fecha_precio_referencia, line_dash="dash", name="Fecha precio de referencia", line_width=1, line_color='gray')
+    # Annotation en fecha de referencia
+    fig.add_annotation(
+        x=fecha_precio_referencia,
+        y=np.log10(df['informal_ajustado_a_fecha'].loc[fecha_precio_referencia]),
+        xref="x",
+        yref="y",
+        text=str(np.round(df['informal_ajustado_a_fecha'].loc[fecha_precio_referencia], 2)),
+        font=dict(
+            size=12,
+            color="#ffffff",
+            ),
+        xanchor="left",
+        yanchor="bottom",
+        borderpad=1,
+        bgcolor="rgb(25, 94, 221)",
+        opacity=0.8,
+        showarrow=True,
+        arrowcolor="rgba(0, 0, 0, 0)",
+        ax=5,
+        ay=-3,
+        )
 
+# Línea horizontal en precio actual
 fig.add_hline(y=df['informal_ajustado_a_fecha'].iloc[-1], name="Precio actual", line_dash="dash",
               line_width=0.5, line_color='gray', annotation_text='Precio actual', annotation_position='top left',
               annotation_font_size=150,
@@ -117,7 +140,7 @@ for year in df.index.year.unique():
 
 # Extend range_x limit a bit further than the current one
 df_filtrado = df.loc[rango_fecha[0]:rango_fecha[1], 'informal_ajustado_a_fecha']
-x_padding = pd.Timedelta(days=len(df_filtrado)//20)
+x_padding = pd.Timedelta(days=len(df_filtrado)//13)
 y_padding = 1.1
 fig.update_xaxes(range=[rango_fecha[0], rango_fecha[1] + x_padding], showspikes=True, spikethickness=0.5)
 fig.update_yaxes(range=[np.log10(df_filtrado.min()/y_padding),
@@ -127,7 +150,30 @@ fig.add_annotation(text="dolar-real.streamlit.app",
                   xref="paper", yref="paper",
                   x=1, y=0, showarrow=False, align="right")
 
-fig.update_layout(dragmode=False, xaxis_title='Fecha', yaxis_title=nombre_variable)
+# Annotation en fecha de hoy
+fig.add_annotation(
+    x=df.index[-1],
+    y=np.log10(df['informal_ajustado_a_fecha'].iloc[-1]),
+    xref="x",
+    yref="y",
+    text=str(np.round(df['informal_ajustado_a_fecha'].iloc[-1], 2)),
+    font=dict(
+        size=12,
+        color="#ffffff",
+        ),
+    xanchor="left",
+    yanchor="bottom",
+    borderpad=1,
+    bgcolor="rgb(25, 94, 221)",
+    opacity=0.8,
+    showarrow=True,
+    arrowcolor="rgba(0, 0, 0, 0)",
+    ax=5,
+    ay=-3,
+    )
+
+fig.update_layout(dragmode=False, xaxis_title='Fecha', yaxis_title=nombre_variable,
+                  hoverlabel=dict(bgcolor="rgba(25, 94, 221, 0.8)", font_color="white"))
 
 with fig_container:
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
