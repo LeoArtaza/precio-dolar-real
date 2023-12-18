@@ -9,10 +9,17 @@ st.set_page_config(page_title="Precio Dólar Real", page_icon="📈")
 
 st.title("Precio Dólar Real")
 
+ajustador = lambda x: (x.inflacion_arg[::-1].cumprod() / x.inflacion_us[::-1].cumprod()).shift(1, fill_value=1)
 @st.cache_data(ttl=pd.Timedelta(hours=1))
 def cargar_datos():
     conn = st.experimental_connection("gsheets", type=GSheetsConnection)
     df = conn.read(index_col=0, parse_dates=True)
+
+
+    # Crear valores ajustados
+    df['informal_ajustado'] = df['venta_informal']*ajustador(df)
+    df['oficial_ajustado'] = df['venta_oficial']*ajustador(df)
+    
     return df
 
 df = cargar_datos()
@@ -90,17 +97,18 @@ with st.expander(label='Opciones Avanzadas', expanded=False):
 
 fecha_precio_referencia = pd.to_datetime(fecha_precio_referencia)
 
-ajustador = (df.inflacion_arg[::-1].cumprod() / df.inflacion_us[::-1].cumprod()).shift(1, fill_value=1)
 
-df['informal_ajustado_a_fecha'] = (df['informal_ajustado'] / ajustador[fecha_precio_referencia]).round(2)
+df['informal_ajustado_a_fecha'] = (df['informal_ajustado'] / ajustador(df)[fecha_precio_referencia]).round(2)
+df['oficial_ajustado_a_fecha'] = (df['oficial_ajustado'] / ajustador(df)[fecha_precio_referencia]).round(2)
 
-nombre_variable = 'Precio ajustado'
+nombre_variable = 'Ajustado informal'
 if base_100:
     df['informal_ajustado_a_fecha'] /= df.loc[fecha_precio_referencia, 'informal_ajustado_a_fecha'] * 0.01
+    df['oficial_ajustado_a_fecha' ] /= df.loc[fecha_precio_referencia,  'oficial_ajustado_a_fecha'] * 0.01
     nombre_variable = 'Índice de precio'
 
-fig = px.line(df.reset_index().rename(columns={'fecha': 'Fecha', 'venta_informal': 'Precio venta', 'informal_ajustado_a_fecha': nombre_variable}),
-              x='Fecha', y=nombre_variable, hover_data=['Fecha', 'Precio venta', nombre_variable], log_y=True,
+fig = px.line(df.reset_index().rename(columns={'fecha': 'Fecha', 'venta_informal': 'Venta informal', 'informal_ajustado_a_fecha': nombre_variable, 'oficial_ajustado_a_fecha': 'Ajustado oficial'}),
+              x='Fecha', y=nombre_variable, hover_data=['Fecha', 'Venta informal', nombre_variable], log_y=True,
               title='Precio dólar blue' + (f' a pesos de {fecha_precio_referencia.strftime("%d de %B de %Y")}' if not base_100 else f'. Base 100 = {fecha_precio_referencia.date()}'))
 
 if fecha_precio_referencia != df.index[-1]:
