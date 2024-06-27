@@ -12,7 +12,7 @@ st.title("Precio Dólar Real")
 ajustador = lambda x: (x.inflacion_arg[::-1].cumprod() / x.inflacion_us[::-1].cumprod()).shift(1, fill_value=1)
 @st.cache_data(ttl=pd.Timedelta(hours=1))
 def cargar_datos():
-    conn = st.experimental_connection("gsheets", type=GSheetsConnection)
+    conn = st.connection("gsheets", type=GSheetsConnection)
     df = conn.read(index_col=0, parse_dates=True)
 
 
