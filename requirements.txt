@@ -2,7 +2,7 @@ numpy==1.26.0
 pandas
 openpyxl
 plotly
-streamlit
+streamlit==1.36.0
 st-gsheets-connection
 sqlalchemy
 psycopg2-binary
