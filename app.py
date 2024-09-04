@@ -52,7 +52,7 @@ with cols[0]:
 with cols[1]:
     st.metric(label=f"Inflación estimada de {calendar.month_name[pd.to_datetime('today').date().month]}",
           value=aumento_porcentaje(df['inflacion_arg'].iloc[-1]**30.5, 1),
-          delta=aumento_porcentaje(df['inflacion_arg'].iloc[-1]**30.5, df['inflacion_arg'].resample('m').first().iloc[-2]**30.5, puntos_porcentuales=True),
+          delta=aumento_porcentaje(df['inflacion_arg'].iloc[-1]**30.5, df['inflacion_arg'].resample('ME').first().iloc[-2]**30.5, puntos_porcentuales=True),
           delta_color='inverse',
           help='Relevamiento de Expectativas de Inflación del BCRA')
 with cols[2]:
