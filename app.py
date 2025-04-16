@@ -66,8 +66,10 @@ st.divider()
 preset_fecha_dict = {'3m': pd.Timedelta(days=90),
                      '6m': pd.Timedelta(days=180),
                      '1a': pd.Timedelta(days=365),
-                     '5a': pd.Timedelta(days=1825),
-                     '10a': pd.Timedelta(days=3650),
+                     '2a': pd.Timedelta(days=365.25*2),
+                     '5a': pd.Timedelta(days=365.25*5),
+                     '10a': pd.Timedelta(days=365.25*10),
+                     '20a': pd.Timedelta(days=365.25*20),
                      'Máx.': pd.Timedelta(days=len(df)-1)}
 
 fig_container = st.container()
