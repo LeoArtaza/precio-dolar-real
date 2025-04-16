@@ -112,7 +112,42 @@ if base_100:
 
 fig = px.line(df.reset_index().rename(columns={'fecha': 'Fecha', 'venta_informal': 'Venta informal', 'informal_ajustado_a_fecha': nombre_variable, 'oficial_ajustado_a_fecha': 'Ajustado oficial'}),
               x='Fecha', y=nombre_variable, hover_data=['Fecha', 'Venta informal', nombre_variable], log_y=True,
-              title='Precio dólar blue' + (f' a pesos de {fecha_precio_referencia.strftime("%d de %B de %Y")}' if not base_100 else f'. Base 100 = {fecha_precio_referencia.date()}'))
+# --- Add Vertical Lines for Presidential Terms using Shapes ---
+presidencies = [
+    {"start": "1989-12-10", "color": "rgb(173, 216, 230)", "name": "Menem"},
+    {"start": "1999-12-10", "color": "rgb(255, 0, 0)", "name": "De La Rúa"},
+    {"start": "2001-12-21", "color": "rgb(173, 216, 230)", "name": "Duhalde"},
+    {"start": "2003-05-25", "color": "rgb(173, 216, 230)", "name": "Kirchner"},
+    {"start": "2007-12-10", "color": "rgb(173, 216, 230)", "name": "CFK"},
+    {"start": "2011-12-10", "color": "rgb(173, 216, 230)", "name": "CFK2"},
+    {"start": "2015-12-10", "color": "rgb(255, 215, 0)", "name": "Macri"},
+    {"start": "2019-12-10", "color": "rgb(173, 216, 230)", "name": "Alberto"},
+    {"start": "2023-12-10", "color": "rgb(128, 0, 128)", "name": "Milei"}
+]
+
+min_date = df.index.min()
+max_date = df.index.max()
+
+for pres in presidencies:
+    start_date = pd.Timestamp(pres["start"])
+
+    # Only add line if start date is within the data range
+    if start_date >= min_date and start_date <= max_date:
+        # Add the vertical line shape
+        fig.add_shape(
+            type="line",
+            xref="x", yref="paper", # x=date axis, y=full plot height
+            x0=start_date, y0=0,    # Start at the date, bottom of plot
+            x1=start_date, y1=1,    # End at the date, top of plot
+            line=dict(
+                color=pres["color"],
+                width=1.5,
+                dash="dash",
+            ),
+            layer="below" # Draw below data lines
+        )
+# --- End Vertical Lines ---
+
 
 if fecha_precio_referencia != df.index[-1]:
     # Linea en fecha de referencia
