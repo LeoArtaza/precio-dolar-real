@@ -107,7 +107,7 @@ last_known_inf_date = df['inflacion_arg'].last_valid_index()
 last_daily_inf_factor = df.loc[last_known_inf_date, 'inflacion_arg']
 
 # Target date for 0% inflation (factor = 1.0)
-target_inf_date = pd.Timestamp('2026-06-31')
+target_inf_date = pd.Timestamp('2026-06-30')
 
 # Create future date range
 future_dates = pd.date_range(start=last_known_inf_date + pd.Timedelta(days=1), end=target_inf_date, freq='D')
