@@ -1,8 +1,9 @@
-import streamlit as st
 from streamlit_gsheets import GSheetsConnection
+import plotly.express as px
+import plotly.graph_objects as go
+import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
 import requests
 
 st.set_page_config(page_title="Precio Dólar Real", page_icon="📈")
