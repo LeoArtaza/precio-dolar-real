@@ -28,9 +28,9 @@ df = cargar_datos()
 @st.cache_data(ttl=pd.Timedelta(minutes=15))
 def cargar_dolar_hoy():
     try:
-        r = requests.get('https://dolarapi.com/v1/dolares/blue')
-        dolar_blue_hoy = eval(r.text)
-        df.loc[df.index[-1], ['venta_informal', 'informal_ajustado']] = dolar_blue_hoy['venta']
+        r = requests.get('https://dolarapi.com/v1/dolares/oficial')
+        dolar_hoy = eval(r.text)
+        df.loc[df.index[-1], ['venta_informal', 'informal_ajustado']] = dolar_hoy['venta']
     except Exception as e:
         st.warning('No se pudo acceder al valor actual.', e)
     return df
