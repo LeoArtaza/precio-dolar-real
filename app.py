@@ -100,6 +100,49 @@ with st.expander(label='Opciones Avanzadas', expanded=False):
 
 fecha_precio_referencia = pd.to_datetime(fecha_precio_referencia)
 
+# Vibe coded
+# --- Inflation Projection ---
+# Find last date with inflation data
+last_known_inf_date = df['inflacion_arg'].last_valid_index()
+last_daily_inf_factor = df.loc[last_known_inf_date, 'inflacion_arg']
+
+# Target date for 0% inflation (factor = 1.0)
+target_inf_date = pd.Timestamp('2026-06-31')
+
+# Create future date range
+future_dates = pd.date_range(start=last_known_inf_date + pd.Timedelta(days=1), end=target_inf_date, freq='D')
+
+# Calculate days for interpolation
+days_to_target = (target_inf_date - last_known_inf_date).days
+
+# Calculate projected daily inflation factors (linear interpolation of the factor itself)
+# We want factor to go from last_daily_inf_factor to 1.0 over days_to_target
+daily_step_down = (1.0 - last_daily_inf_factor) / days_to_target
+projected_inf_factors = [last_daily_inf_factor + (i + 1) * daily_step_down for i in range(len(future_dates))]
+
+# Create future inflation series
+future_inf_series = pd.Series(projected_inf_factors, index=future_dates)
+
+# Combine historical and projected inflation
+full_inflacion_arg = pd.concat([df['inflacion_arg'], future_inf_series])
+# Ensure no duplicates, keep first (original) if any overlap
+full_inflacion_arg = full_inflacion_arg[~full_inflacion_arg.index.duplicated(keep='first')]
+
+# Extend US inflation (assuming constant at last value)
+last_us_inf = df['inflacion_us'].iloc[-1]
+future_us_inf_series = pd.Series(last_us_inf, index=future_dates)
+full_inflacion_us = pd.concat([df['inflacion_us'], future_us_inf_series])
+full_inflacion_us = full_inflacion_us[~full_inflacion_us.index.duplicated(keep='first')]
+
+# Create a temporary dataframe for the full adjuster calculation
+temp_df_full = pd.DataFrame({'inflacion_arg': full_inflacion_arg, 'inflacion_us': full_inflacion_us})
+temp_df_full = temp_df_full.sort_index() # Ensure dates are sorted
+
+# Calculate the full adjuster function based on combined inflation data
+# This adjuster brings values from date 't' to the *end date's* equivalent value
+full_ajustador = (temp_df_full.inflacion_arg[::-1].cumprod() / temp_df_full.inflacion_us[::-1].cumprod()).shift(1, fill_value=1)
+# --- End Inflation Projection ---
+
 
 df['informal_ajustado_a_fecha'] = (df['informal_ajustado'] / ajustador(df)[fecha_precio_referencia]).round(2)
 df['oficial_ajustado_a_fecha'] = (df['oficial_ajustado'] / ajustador(df)[fecha_precio_referencia]).round(2)
@@ -124,6 +167,65 @@ fig.add_trace(go.Scatter(
     hovertemplate='<b>Fecha</b>: %{x|%d/%m/%Y}<br><b>Ajustado oficial</b>: %{y:.2f}<extra></extra>', # Custom hover text
     showlegend=False # Hide this trace from the legend
 ))
+
+# --- Dynamic Color Band Calculation using Shapes ---
+band_start_date = pd.Timestamp('2025-04-15')
+initial_lower = 1000
+initial_upper = 1400
+lower_rate = 0.99
+upper_rate = 1.01
+num_months = 12
+
+current_lower = initial_lower
+current_upper = initial_upper
+current_segment_start_date = band_start_date
+
+for month_index in range(num_months):
+    # Calculate NOMINAL bounds for the current month
+    y0_nominal = initial_lower * (lower_rate ** month_index)
+    y1_nominal = initial_upper * (upper_rate ** month_index)
+
+    # --- Adjust bounds for inflation relative to fecha_precio_referencia ---
+    # Get the adjustment factor to bring value at segment start date to end date value
+    adjust_factor_start = full_ajustador.get(current_segment_start_date, np.nan)
+    # Get the adjustment factor to bring value at reference date to end date value
+    adjust_factor_ref = full_ajustador.get(fecha_precio_referencia, np.nan)
+
+    # Calculate the final adjusted bounds for the shape
+    # Formula: Y_adj_to_ref = Y_nominal * (adjust_factor_start / adjust_factor_ref)
+    if pd.notna(adjust_factor_start) and pd.notna(adjust_factor_ref) and adjust_factor_ref != 0:
+         y0_adj = y0_nominal * (adjust_factor_start / adjust_factor_ref)
+         y1_adj = y1_nominal * (adjust_factor_start / adjust_factor_ref)
+    else:
+         # Fallback or handle error if adjustment factors are missing/zero
+         y0_adj = np.nan # Or some default like y0_nominal
+         y1_adj = np.nan # Or some default like y1_nominal
+
+    # Calculate end date for the current segment
+    # Handle potential date rollovers carefully
+    try:
+        current_segment_end_date = current_segment_start_date + pd.DateOffset(months=1)
+    except ValueError: # Handle cases like Jan 31 + 1 month -> Feb 28/29
+        # Go to the start of the next month and subtract one day
+        next_month_start = (current_segment_start_date + pd.DateOffset(months=1)).replace(day=1)
+        current_segment_end_date = next_month_start - pd.Timedelta(days=1)
+
+
+    # Add shape for this month's segment
+    fig.add_shape(
+        type="rect",
+        xref="x", yref="y",
+        x0=current_segment_start_date, y0=y0_adj, # Use adjusted bounds
+        x1=current_segment_end_date, y1=y1_adj, # Use adjusted bounds
+        fillcolor="rgba(0, 128, 0, 0.3)", # Green
+        layer="below",
+        line_width=0,
+    )
+
+    # Update start date for the next segment
+    current_segment_start_date = current_segment_end_date
+
+# --- End Dynamic Color Band ---
 
 # --- Add Vertical Lines for Presidential Terms using Shapes ---
 presidencies = [
@@ -198,12 +300,77 @@ for year in df.index.year.unique():
     fig.add_vline(x=pd.Timestamp(year, 1, 1), name=f"Año {year}", line_width=0.05)
 
 # Extend range_x limit a bit further than the current one
-df_filtrado = df.loc[rango_fecha[0]:rango_fecha[1], 'informal_ajustado_a_fecha']
-x_padding = pd.Timedelta(days=len(df_filtrado)//13)
+df_filtrado = df.loc[rango_fecha[0]:rango_fecha[1]]
+x_padding = pd.Timedelta(days=len(df_filtrado)//2)
+x_padding = pd.Timedelta(days=365)
 y_padding = 1.1
 fig.update_xaxes(range=[rango_fecha[0], rango_fecha[1] + x_padding], showspikes=True, spikethickness=0.5)
-fig.update_yaxes(range=[np.log10(df_filtrado.min()/y_padding),
-                        np.log10(df_filtrado.max()*y_padding)], type="log", showspikes=True, spikethickness=0.5)
+# --- Calculate Y-axis range considering adjusted bands ---
+
+# 1. Calculate min/max of the adjusted bands over their FULL 12-month duration
+full_band_end_date = band_start_date + pd.DateOffset(months=num_months) - pd.Timedelta(days=1) # End of the 12th month
+full_band_dates = pd.date_range(start=band_start_date, end=full_band_end_date, freq='D')
+abs_min_adj_lower_band = np.inf
+abs_max_adj_upper_band = -np.inf
+
+if not full_band_dates.empty:
+    temp_full_band_df = pd.DataFrame(index=full_band_dates)
+    temp_full_band_df['months_passed'] = temp_full_band_df.index.to_series().apply(
+        lambda date: max(0, int(((date.year - band_start_date.year) * 12 + date.month - band_start_date.month - (1 if date.day < band_start_date.day else 0))))
+    )
+    temp_full_band_df['lower_nominal'] = initial_lower * (lower_rate ** temp_full_band_df['months_passed'])
+    temp_full_band_df['upper_nominal'] = initial_upper * (upper_rate ** temp_full_band_df['months_passed'])
+
+    adjust_factors_full_band = full_ajustador.reindex(temp_full_band_df.index).ffill().bfill()
+    adjust_factor_ref = full_ajustador.get(fecha_precio_referencia, np.nan)
+
+    if pd.notna(adjust_factor_ref) and adjust_factor_ref != 0:
+        temp_full_band_df['lower_adj'] = temp_full_band_df['lower_nominal'] * (adjust_factors_full_band / adjust_factor_ref)
+        temp_full_band_df['upper_adj'] = temp_full_band_df['upper_nominal'] * (adjust_factors_full_band / adjust_factor_ref)
+        abs_min_adj_lower_band = temp_full_band_df['lower_adj'].min()
+        abs_max_adj_upper_band = temp_full_band_df['upper_adj'].max()
+    else: # Fallback
+        abs_min_adj_lower_band = temp_full_band_df['lower_nominal'].min()
+        abs_max_adj_upper_band = temp_full_band_df['upper_nominal'].max()
+
+# 2. Find min/max of adjusted bands *within the filtered date range* (for max calculation)
+band_dates_in_range = pd.date_range(start=max(band_start_date, pd.Timestamp(rango_fecha[0])),
+                                    end=min(full_band_end_date, pd.Timestamp(rango_fecha[1])),
+                                    freq='D')
+max_adj_band_in_range = -np.inf
+if not band_dates_in_range.empty and 'upper_adj' in temp_full_band_df.columns:
+     max_adj_band_in_range = temp_full_band_df.loc[band_dates_in_range, 'upper_adj'].max()
+elif not band_dates_in_range.empty: # Fallback if adjustment failed
+     max_adj_band_in_range = temp_full_band_df.loc[band_dates_in_range, 'upper_nominal'].max()
+
+# 3. Determine overall min/max y values for axis calculation
+# Min value considers the data in view AND the absolute minimum of the lower band
+min_y_data_in_view = df_filtrado['informal_ajustado_a_fecha'].min()
+if 'oficial_ajustado_a_fecha' in df_filtrado:
+    min_y_data_in_view = min(min_y_data_in_view, df_filtrado['oficial_ajustado_a_fecha'].min())
+
+min_y_for_axis = min(min_y_data_in_view, abs_min_adj_lower_band if np.isfinite(abs_min_adj_lower_band) else min_y_data_in_view)
+
+# Max value considers the data in view AND the maximum of the band *within the view*
+max_y_data_in_view = df_filtrado['informal_ajustado_a_fecha'].max()
+if 'oficial_ajustado_a_fecha' in df_filtrado:
+    max_y_data_in_view = max(max_y_data_in_view, df_filtrado['oficial_ajustado_a_fecha'].max())
+
+max_y_for_axis = max(max_y_data_in_view, max_adj_band_in_range if np.isfinite(max_adj_band_in_range) else max_y_data_in_view)
+
+# Calculate log range without padding first (handle potential log(0) or log(neg))
+# 4. Calculate log range without padding first
+log_min = np.log10(max(min_y_for_axis, 1e-9)) # Use small epsilon to avoid log(0)
+log_max = np.log10(max(max_y_for_axis, 1e-9))
+
+# Apply padding *after* taking the logarithm
+# Calculate padding in log scale (log(1.1) is approx 0.04)
+log_padding = np.log10(y_padding)
+padded_min_y_log = log_min - log_padding
+padded_max_y_log = log_max + log_padding
+
+fig.update_yaxes(range=[padded_min_y_log, padded_max_y_log], type="log", showspikes=True, spikethickness=0.5)
+# --- End Y-axis range update ---
 
 fig.add_annotation(text="dolar-real.streamlit.app",
                   xref="paper", yref="paper",
