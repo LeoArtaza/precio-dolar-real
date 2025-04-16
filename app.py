@@ -112,6 +112,19 @@ if base_100:
 
 fig = px.line(df.reset_index().rename(columns={'fecha': 'Fecha', 'venta_informal': 'Venta informal', 'informal_ajustado_a_fecha': nombre_variable, 'oficial_ajustado_a_fecha': 'Ajustado oficial'}),
               x='Fecha', y=nombre_variable, hover_data=['Fecha', 'Venta informal', nombre_variable], log_y=True,
+              title='Precio del dólar' + (f' a pesos de {fecha_precio_referencia.strftime("%d de %B de %Y")}' if not base_100 else f'. Base 100 = {fecha_precio_referencia.date()}'))
+
+# Add Dólar Oficial trace
+fig.add_trace(go.Scatter(
+    x=df.index,
+    y=df['oficial_ajustado_a_fecha'],
+    mode='lines',
+    name='Ajustado oficial', # Name for hover
+    line=dict(color='orange'), # Optional: Set a distinct color
+    hovertemplate='<b>Fecha</b>: %{x|%d/%m/%Y}<br><b>Ajustado oficial</b>: %{y:.2f}<extra></extra>', # Custom hover text
+    showlegend=False # Hide this trace from the legend
+))
+
 # --- Add Vertical Lines for Presidential Terms using Shapes ---
 presidencies = [
     {"start": "1989-12-10", "color": "rgb(173, 216, 230)", "name": "Menem"},
