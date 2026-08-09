@@ -28,14 +28,22 @@ df = cargar_datos()
 @st.cache_data(ttl=pd.Timedelta(minutes=15))
 def cargar_dolar_hoy():
     try:
-        r = requests.get('https://dolarapi.com/v1/dolares/oficial')
-        dolar_hoy = eval(r.text)
-        df.loc[df.index[-1], ['venta_informal', 'informal_ajustado']] = dolar_hoy['venta']
-    except Exception as e:
-        st.warning('No se pudo acceder al valor actual.', e)
+        r = requests.get('https://dolarapi.com/v1/dolares/oficial', timeout=30)
+        r.raise_for_status()
+        dolar_hoy = r.json()
+        fecha_precio_actual = df['venta_informal'].last_valid_index()
+        if fecha_precio_actual is None:
+            raise ValueError('No hay una fecha actual de precios disponible.')
+        df.loc[fecha_precio_actual, ['venta_informal', 'informal_ajustado']] = dolar_hoy['venta']
+    except Exception:
+        st.warning('No se pudo acceder al valor actual.')
     return df
 
 df = cargar_dolar_hoy()
+
+df_precios = df.loc[df['venta_informal'].notna()].copy()
+fecha_precio_actual = df_precios.index[-1]
+df_inflacion_hasta_hoy = df.loc[:fecha_precio_actual]
 
 import locale
 locale.setlocale(locale.LC_ALL,'es_ES.UTF-8')
@@ -47,18 +55,18 @@ def aumento_porcentaje(x, y, puntos_porcentuales=False):
 cols = st.columns(3)
 with cols[0]:
     st.metric(label="Dólar Blue Hoy",
-          value='$' + str(round(df['venta_informal'].iloc[-1])),
-          delta=aumento_porcentaje(df['informal_ajustado'].iloc[-1], df['informal_ajustado'].iloc[-2]),
+          value='$' + str(round(df_precios['venta_informal'].iloc[-1])),
+          delta=aumento_porcentaje(df_precios['informal_ajustado'].iloc[-1], df_precios['informal_ajustado'].iloc[-2]),
           delta_color='inverse')
 with cols[1]:
     st.metric(label=f"Inflación estimada de {calendar.month_name[pd.to_datetime('today').date().month]}",
-          value=aumento_porcentaje(df['inflacion_arg'].iloc[-1]**30.5, 1),
-          delta=aumento_porcentaje(df['inflacion_arg'].iloc[-1]**30.5, df['inflacion_arg'].resample('ME').first().iloc[-2]**30.5, puntos_porcentuales=True),
+          value=aumento_porcentaje(df_inflacion_hasta_hoy['inflacion_arg'].iloc[-1]**30.5, 1),
+          delta=aumento_porcentaje(df_inflacion_hasta_hoy['inflacion_arg'].iloc[-1]**30.5, df_inflacion_hasta_hoy['inflacion_arg'].resample('ME').first().iloc[-2]**30.5, puntos_porcentuales=True),
           delta_color='inverse',
           help='Relevamiento de Expectativas de Inflación del BCRA')
 with cols[2]:
     st.metric(label=f"Equivalente a fin de {calendar.month_name[pd.to_datetime('today').date().month]}",
-          value='$' + str(round(df['venta_informal'].iloc[-1]*df['inflacion_arg'].iloc[-1]**(30.5-df.index[-1].day))),
+          value='$' + str(round(df_precios['venta_informal'].iloc[-1]*df_inflacion_hasta_hoy['inflacion_arg'].iloc[-1]**(30.5-fecha_precio_actual.day))),
               help='Este sería el valor del dólar blue a fin de mes si mantuviera su valor real, asumiendo que se cumple la expectativa de inflación, y que la inflación es homogénea a lo largo del mes.')
 
 st.divider()
