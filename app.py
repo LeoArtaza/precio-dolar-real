@@ -88,6 +88,49 @@ preset_fecha_dict = {
     'Máx.': pd.Timedelta(days=len(df_precios) - 1),
 }
 
+def actualizar_rango_preset():
+    max_date = df_precios.index.max().date()
+    preset = st.session_state['preset_fecha']
+    st.session_state['slider_fechas'] = (
+        (pd.Timestamp(max_date) - preset_fecha_dict[preset]).date(),
+        max_date,
+    )
+
+st.session_state.setdefault(
+    'slider_fechas',
+    (
+        (pd.Timestamp(df_precios.index.max().date()) - pd.Timedelta(days=365.25 * 5)).date(),
+        df_precios.index.max().date(),
+    ),
+)
+
+def reducir_puntos_para_grafico(frame, max_points=3000):
+    """Keep visual extrema while limiting the payload sent to Plotly."""
+    if len(frame) <= max_points:
+        return frame
+
+    value_columns = [
+        column for column in ('informal_ajustado_a_fecha', 'oficial_ajustado_a_fecha')
+        if column in frame
+    ]
+    bucket_count = max(1, max_points // (2 * max(len(value_columns), 1)))
+    boundaries = np.linspace(0, len(frame), bucket_count + 1, dtype=int)
+    positions = {0, len(frame) - 1}
+
+    for start, end in zip(boundaries[:-1], boundaries[1:]):
+        bucket = frame.iloc[start:end]
+        if bucket.empty:
+            continue
+        for column in value_columns:
+            values = bucket[column].to_numpy()
+            valid = np.flatnonzero(np.isfinite(values))
+            if valid.size:
+                positions.add(start + valid[values[valid].argmin()])
+                positions.add(start + valid[values[valid].argmax()])
+
+    return frame.iloc[sorted(positions)]
+
+@st.fragment
 def render_chart():
     chart_df = df.copy()
 
@@ -100,11 +143,11 @@ def render_chart():
             key='preset_fecha',
             horizontal=True,
             label_visibility='collapsed',
+            on_change=actualizar_rango_preset,
         )
 
     with st.expander(label='Opciones Avanzadas', expanded=False):
         rango_fecha = st.slider('Rango de fechas', df_precios.index.min().date(), df_precios.index.max().date(),
-                                value=((pd.Timestamp(df_precios.index.max().date()) - pd.Timedelta(days=365.25 * 5)).date(), df_precios.index.max().date()),
                                 format="DD/MM/YY", key='slider_fechas')
         cols = st.columns(spec=[0.2, 1])
         with cols[0]:
@@ -148,10 +191,14 @@ def render_chart():
     df_precios_chart = chart_df.loc[chart_df['venta_informal'].notna()].copy()
     x_padding = pd.Timedelta(days=365)
     df_filtrado = df_precios_chart.loc[rango_fecha[0]:rango_fecha[1]]
-    df_chart_visible = df_precios_chart
+    df_chart_visible = df_precios_chart.loc[
+        rango_fecha[0]:rango_fecha[1] + x_padding
+    ]
+    df_chart_visible = reducir_puntos_para_grafico(df_chart_visible)
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(
+    shapes = []
+    fig.add_trace(go.Scattergl(
         x=df_chart_visible.index,
         y=df_chart_visible['informal_ajustado_a_fecha'],
         mode='lines',
@@ -165,7 +212,7 @@ def render_chart():
     ))
 
     # Add Dólar Oficial trace
-    fig.add_trace(go.Scatter(
+    fig.add_trace(go.Scattergl(
         x=df_chart_visible.index,
         y=df_chart_visible['oficial_ajustado_a_fecha'],
         mode='lines',
@@ -223,14 +270,16 @@ def render_chart():
         trayectoria_bandas['techo_ajustado'] = trayectoria_bandas['techo_nominal']
 
     for band in trayectoria_bandas.itertuples(index=False):
-        fig.add_shape(
-            type="rect",
-            xref="x", yref="y",
-            x0=band.desde, y0=band.piso_ajustado,
-            x1=band.hasta, y1=band.techo_ajustado,
-            fillcolor="rgba(0, 128, 0, 0.3)",
-            layer="below",
-            line_width=0,
+        shapes.append(
+            dict(
+                type="rect",
+                xref="x", yref="y",
+                x0=band.desde, y0=band.piso_ajustado,
+                x1=band.hasta, y1=band.techo_ajustado,
+                fillcolor="rgba(0, 128, 0, 0.3)",
+                layer="below",
+                line_width=0,
+            )
         )
 
     # --- End Policy-driven currency bands ---
@@ -257,17 +306,19 @@ def render_chart():
         # Only add line if start date is within the data range
         if start_date >= min_date and start_date <= max_date:
             # Add the vertical line shape
-            fig.add_shape(
-                type="line",
-                xref="x", yref="paper", # x=date axis, y=full plot height
-                x0=start_date, y0=0,    # Start at the date, bottom of plot
-                x1=start_date, y1=1,    # End at the date, top of plot
-                line=dict(
-                    color=pres["color"],
-                    width=1.5,
-                    dash="dash",
+            shapes.append(
+                dict(
+                    type="line",
+                    xref="x", yref="paper", # x=date axis, y=full plot height
+                    x0=start_date, y0=0,    # Start at the date, bottom of plot
+                    x1=start_date, y1=1,    # End at the date, top of plot
+                    line=dict(
+                        color=pres["color"],
+                        width=1.5,
+                        dash="dash",
+                    ),
+                    layer="below" # Draw below data lines
                 ),
-                layer="below" # Draw below data lines
             )
     # --- End Vertical Lines ---
 
@@ -305,14 +356,17 @@ def render_chart():
 
     # Add vertical line for each year
     for year in df_precios_chart.index.year.unique():
-        fig.add_shape(
-            type="line",
-            xref="x", yref="paper",
-            x0=pd.Timestamp(year, 1, 1), y0=0,
-            x1=pd.Timestamp(year, 1, 1), y1=1,
-            line=dict(width=0.05),
+        shapes.append(
+            dict(
+                type="line",
+                xref="x", yref="paper",
+                x0=pd.Timestamp(year, 1, 1), y0=0,
+                x1=pd.Timestamp(year, 1, 1), y1=1,
+                line=dict(width=0.05),
+            )
         )
 
+    fig.update_layout(shapes=shapes)
 
     # Extend range_x limit a bit further than the current one
     y_padding = 1.1
