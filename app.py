@@ -88,20 +88,23 @@ preset_fecha_dict = {
     'Máx.': pd.Timedelta(days=len(df_precios) - 1),
 }
 
-def actualizar_rango_preset():
+PRESET_FECHA_DEFAULT = '10a'
+PRESET_FECHA_OPCIONES = list(preset_fecha_dict.keys())[::-1]
+
+def rango_para_preset(preset):
     max_date = df_precios.index.max().date()
-    preset = st.session_state['preset_fecha']
-    st.session_state['slider_fechas'] = (
+    return (
         (pd.Timestamp(max_date) - preset_fecha_dict[preset]).date(),
         max_date,
     )
 
+def actualizar_rango_preset():
+    preset = st.session_state['preset_fecha']
+    st.session_state['slider_fechas'] = rango_para_preset(preset)
+
 st.session_state.setdefault(
     'slider_fechas',
-    (
-        (pd.Timestamp(df_precios.index.max().date()) - pd.Timedelta(days=365.25 * 5)).date(),
-        df_precios.index.max().date(),
-    ),
+    rango_para_preset(PRESET_FECHA_DEFAULT),
 )
 
 def reducir_puntos_para_grafico(frame, max_points=3000):
@@ -138,8 +141,8 @@ def render_chart():
     with fig_container:
         st.radio(
             'Rangos de fechas predeterminados',
-            list(preset_fecha_dict.keys())[::-1],
-            index=2,
+            PRESET_FECHA_OPCIONES,
+            index=PRESET_FECHA_OPCIONES.index(PRESET_FECHA_DEFAULT),
             key='preset_fecha',
             horizontal=True,
             label_visibility='collapsed',
@@ -183,9 +186,13 @@ def render_chart():
     chart_df['oficial_ajustado_a_fecha'] = (chart_df['oficial_ajustado'] / adjust_factor_ref).round(2)
 
     nombre_variable = 'Ajustado informal'
+    factor_base_100 = 1.0
     if base_100:
-        chart_df['informal_ajustado_a_fecha'] /= chart_df.loc[fecha_precio_referencia, 'informal_ajustado_a_fecha'] * 0.01
-        chart_df['oficial_ajustado_a_fecha'] /= chart_df.loc[fecha_precio_referencia, 'oficial_ajustado_a_fecha'] * 0.01
+        factor_base_100 = chart_df.loc[fecha_precio_referencia, 'informal_ajustado_a_fecha'] * 0.01
+        chart_df['informal_ajustado_a_fecha'] /= factor_base_100
+        chart_df['oficial_ajustado_a_fecha'] /= (
+            chart_df.loc[fecha_precio_referencia, 'oficial_ajustado_a_fecha'] * 0.01
+        )
         nombre_variable = 'Índice de precio'
 
     df_precios_chart = chart_df.loc[chart_df['venta_informal'].notna()].copy()
@@ -268,6 +275,10 @@ def render_chart():
     else:
         trayectoria_bandas['piso_ajustado'] = trayectoria_bandas['piso_nominal']
         trayectoria_bandas['techo_ajustado'] = trayectoria_bandas['techo_nominal']
+
+    if base_100:
+        trayectoria_bandas['piso_ajustado'] /= factor_base_100
+        trayectoria_bandas['techo_ajustado'] /= factor_base_100
 
     for band in trayectoria_bandas.itertuples(index=False):
         shapes.append(
@@ -370,8 +381,12 @@ def render_chart():
 
     # Extend range_x limit a bit further than the current one
     y_padding = 1.1
+    x_axis_end = max(
+        pd.Timestamp(rango_fecha[1]) + x_padding,
+        pd.Timestamp(band_period_end_date),
+    )
     fig.update_xaxes(
-        range=[rango_fecha[0], rango_fecha[1] + x_padding],
+        range=[rango_fecha[0], x_axis_end],
         showspikes=True,
         spikethickness=0.5,
     )
