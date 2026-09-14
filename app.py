@@ -12,6 +12,7 @@ from bandas_cambiarias import (
     TramoPolitica,
     inflacion_mensual_desde_factor_diario,
 )
+from calculadora_inflacion import calcular_inflacion_periodo
 
 st.set_page_config(page_title="Precio Dólar Real", page_icon="📈")
 
@@ -491,6 +492,114 @@ def render_chart():
 
 
 render_chart()
+
+
+def formato_numero(valor, decimales=2):
+    return f"{valor:,.{decimales}f}".replace(",", "_").replace(".", ",").replace("_", ".")
+
+
+def formato_porcentaje(valor, decimales=1):
+    return f"{valor:+,.{decimales}f}%".replace(",", "_").replace(".", ",").replace("_", ".")
+
+
+def etiqueta_mes(periodo):
+    nombres_meses = (
+        "enero", "febrero", "marzo", "abril", "mayo", "junio",
+        "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+    )
+    return f"{nombres_meses[periodo.month - 1]} {periodo.year}"
+
+
+ultimo_mes_inflacion = (
+    pd.Timestamp(fecha_precio_actual).to_period("M") - 1
+)
+primer_mes_inflacion = df["inflacion_arg"].dropna().index.min().to_period("M")
+meses_calculadora = list(
+    pd.period_range(primer_mes_inflacion, ultimo_mes_inflacion, freq="M")
+)
+mes_a_etiqueta = {periodo: etiqueta_mes(periodo) for periodo in meses_calculadora}
+etiqueta_a_mes = {etiqueta: periodo for periodo, etiqueta in mes_a_etiqueta.items()}
+inicio_predeterminado = max(
+    primer_mes_inflacion,
+    ultimo_mes_inflacion - 60,
+)
+
+with st.container(border=True):
+    st.subheader("Calculadora de inflación")
+    st.caption(
+        "Las fechas se interpretan por mes e incluyen el mes inicial y el final. "
+        f"El final predeterminado es {etiqueta_mes(ultimo_mes_inflacion)} y usa inflación observada."
+    )
+
+    with st.form("calculadora_inflacion", border=False):
+        cols = st.columns(3)
+        with cols[0]:
+            mes_inicio_calculadora = st.selectbox(
+                "Desde",
+                options=[mes_a_etiqueta[periodo] for periodo in meses_calculadora],
+                index=meses_calculadora.index(inicio_predeterminado),
+            )
+        with cols[1]:
+            periodo_inicio = etiqueta_a_mes[mes_inicio_calculadora]
+            meses_fin = [periodo for periodo in meses_calculadora if periodo >= periodo_inicio]
+            mes_fin_calculadora = st.selectbox(
+                "Hasta",
+                options=[mes_a_etiqueta[periodo] for periodo in meses_fin],
+                index=len(meses_fin) - 1,
+            )
+        with cols[2]:
+            monto_usd = st.number_input(
+                "Monto inicial (USD)",
+                min_value=0.01,
+                value=500.0,
+                step=100.0,
+                format="%.2f",
+            )
+        st.form_submit_button("Calcular", type="primary")
+
+    try:
+        resultado = calcular_inflacion_periodo(
+            df,
+            fecha_inicio=etiqueta_a_mes[mes_inicio_calculadora],
+            fecha_fin=etiqueta_a_mes[mes_fin_calculadora],
+            monto_usd=monto_usd,
+        )
+    except ValueError as error:
+        st.warning(str(error))
+    else:
+        st.caption(
+            f"Período: {etiqueta_mes(resultado.fecha_inicio.to_period('M'))} → "
+            f"{etiqueta_mes(resultado.fecha_fin.to_period('M'))}. "
+            "Inflación del dólar = CPI de EE.UU.; no es la variación de la cotización."
+        )
+        metric_cols = st.columns(2)
+        with metric_cols[0]:
+            st.metric("Inflación del peso", formato_porcentaje(resultado.inflacion_peso_pct))
+        with metric_cols[1]:
+            st.metric("Inflación del dólar", formato_porcentaje(resultado.inflacion_dolar_pct))
+
+        st.markdown("**Primero: el monto en dólares de hoy**")
+        st.write(
+            f"US$ {formato_numero(resultado.monto_usd_inicial)} "
+            f"→ **US$ {formato_numero(resultado.monto_usd_ajustado_por_inflacion_dolar)}** "
+            f"por inflación del dólar ({formato_porcentaje(resultado.inflacion_dolar_pct)})."
+        )
+
+        st.markdown("**Después: el dólar en términos reales en Argentina**")
+        st.write(
+            f"US$ {formato_numero(resultado.monto_usd_inicial)} "
+            f"→ **US$ {formato_numero(resultado.monto_usd_equivalente)}** "
+            f"({formato_porcentaje(resultado.variacion_relativa_pct)})."
+        )
+        st.write(
+            f"US$ {formato_numero(resultado.monto_usd_equivalente)} "
+            f"→ **US$ {formato_numero(resultado.monto_usd_revertido)}** "
+            f"({formato_porcentaje(resultado.variacion_inversa_pct)})."
+        )
+        st.caption(
+            "La primera cuenta actualiza el poder de compra del dólar. La segunda además incorpora "
+            "la inflación argentina y la variación nominal del blue."
+        )
 
 with st.expander(label='Metodología', expanded=False):
     st.markdown("""## Cálculo
